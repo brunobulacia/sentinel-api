@@ -1,9 +1,20 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+type AuthUser = { id: string; email: string; name: string };
 import { ScanHistoryService } from './scan-history.service';
 import { Criticality, ScanStatus } from '../common/enums';
 
 @ApiTags('scan-history')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('scan-history')
 export class ScanHistoryController {
   constructor(private readonly service: ScanHistoryService) {}
@@ -15,18 +26,19 @@ export class ScanHistoryController {
   @ApiQuery({ name: 'criticality', enum: Criticality, required: false })
   @ApiQuery({ name: 'status', enum: ScanStatus, required: false })
   findAll(
+    @CurrentUser() user: AuthUser,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('criticality') criticality?: Criticality,
     @Query('status') status?: ScanStatus,
   ) {
-    return this.service.findAll({ from, to, criticality, status });
+    return this.service.findAll(user.id, { from, to, criticality, status });
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Stats of last 10 scans for charts' })
-  stats() {
-    return this.service.stats();
+  stats(@CurrentUser() user: AuthUser) {
+    return this.service.stats(user.id);
   }
 
   @Get('compare/:id1/:id2')

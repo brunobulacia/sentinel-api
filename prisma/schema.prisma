@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum VulnerabilityType {
+  SQL_INJECTION
+  XSS
+  CSRF
+  INSECURE_CONFIG
+  DATA_EXPOSURE
+  BROKEN_AUTH
+  SECURITY_MISCONFIG
+  SSRF
+  OTHER
+}
+
+enum ScanDepth {
+  low
+  medium
+  deep
+}
+
+enum ScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum Criticality {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model User {
+  id          String       @id @default(uuid())
+  email       String       @unique
+  name        String
+  password    String
+  createdAt   DateTime     @default(now())
+  scanConfigs ScanConfig[]
+
+  @@map("users")
+}
+
+model ScanConfig {
+  id                 String              @id @default(uuid())
+  name               String
+  targetUrl          String
+  vulnerabilityTypes VulnerabilityType[]
+  depth              ScanDepth           @default(medium)
+  scheduledAt        DateTime?
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  userId             String
+  user               User                @relation(fields: [userId], references: [id])
+  scanExecutions     ScanExecution[]
+
+  @@map("scan_configs")
+}
+
+model ScanExecution {
+  id                   String          @id @default(uuid())
+  scanConfigId         String
+  scanConfig           ScanConfig      @relation(fields: [scanConfigId], references: [id])
+  status               ScanStatus      @default(PENDING)
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  progress             Int             @default(0)
+  totalVulnerabilities Int             @default(0)
+  errorMessage         String?
+  createdAt            DateTime        @default(now())
+  vulnerabilities      Vulnerability[]
+  reports              Report[]
+
+  @@map("scan_executions")
+}
+
+model Vulnerability {
+  id              String            @id @default(uuid())
+  name            String
+  description     String
+  type            VulnerabilityType
+  criticality     Criticality
+  cvssScore       Float?
+  affectedUrl     String
+  recommendation  String
+  remediated      Boolean           @default(false)
+  remediatedAt    DateTime?
+  scanExecutionId String
+  scanExecution   ScanExecution     @relation(fields: [scanExecutionId], references: [id])
+  createdAt       DateTime          @default(now())
+
+  @@map("vulnerabilities")
+}
+
+model Report {
+  id                   String        @id @default(uuid())
+  title                String
+  format               String        @default("HTML")
+  content              String
+  totalVulnerabilities Int           @default(0)
+  highCount            Int           @default(0)
+  mediumCount          Int           @default(0)
+  lowCount             Int           @default(0)
+  scanExecutionId      String
+  scanExecution        ScanExecution @relation(fields: [scanExecutionId], references: [id])
+  generatedAt          DateTime      @default(now())
+
+  @@map("reports")
+}
