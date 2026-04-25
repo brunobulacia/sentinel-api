@@ -37,6 +37,17 @@ enum Criticality {
   LOW
 }
 
+model User {
+  id          String       @id @default(uuid())
+  email       String       @unique
+  name        String
+  password    String
+  createdAt   DateTime     @default(now())
+  scanConfigs ScanConfig[]
+
+  @@map("users")
+}
+
 model ScanConfig {
   id                 String              @id @default(uuid())
   name               String
@@ -47,6 +58,8 @@ model ScanConfig {
   isActive           Boolean             @default(true)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  userId             String
+  user               User                @relation(fields: [userId], references: [id])
   scanExecutions     ScanExecution[]
 
   @@map("scan_configs")

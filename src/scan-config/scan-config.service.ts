@@ -6,7 +6,7 @@ import { CreateScanConfigDto, UpdateScanConfigDto } from './dto/scan-config.dto'
 export class ScanConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateScanConfigDto) {
+  create(dto: CreateScanConfigDto, userId: string) {
     return this.prisma.scanConfig.create({
       data: {
         name: dto.name,
@@ -14,27 +14,28 @@ export class ScanConfigService {
         vulnerabilityTypes: dto.vulnerabilityTypes ?? [],
         depth: dto.depth,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+        userId,
       },
     });
   }
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.scanConfig.findMany({
-      where: { isActive: true },
+      where: { isActive: true, userId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
     const config = await this.prisma.scanConfig.findFirst({
-      where: { id, isActive: true },
+      where: { id, isActive: true, userId },
     });
     if (!config) throw new NotFoundException(`ScanConfig ${id} not found`);
     return config;
   }
 
-  async update(id: string, dto: UpdateScanConfigDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateScanConfigDto, userId: string) {
+    await this.findOne(id, userId);
     return this.prisma.scanConfig.update({
       where: { id },
       data: {
@@ -52,8 +53,8 @@ export class ScanConfigService {
     });
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, userId: string): Promise<void> {
+    await this.findOne(id, userId);
     await this.prisma.scanConfig.update({
       where: { id },
       data: { isActive: false },

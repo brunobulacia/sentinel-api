@@ -6,9 +6,10 @@ import { Criticality, ScanStatus } from '../common/enums';
 export class ScanHistoryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(filters: { from?: string; to?: string; criticality?: Criticality; status?: ScanStatus }) {
+  findAll(userId: string, filters: { from?: string; to?: string; criticality?: Criticality; status?: ScanStatus }) {
     return this.prisma.scanExecution.findMany({
       where: {
+        scanConfig: { userId },
         ...(filters.status && { status: filters.status }),
         ...(filters.from &&
           filters.to && {
@@ -23,8 +24,9 @@ export class ScanHistoryService {
     });
   }
 
-  async stats() {
+  async stats(userId: string) {
     const all = await this.prisma.scanExecution.findMany({
+      where: { scanConfig: { userId } },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { scanConfig: true, vulnerabilities: true },

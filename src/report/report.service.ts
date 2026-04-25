@@ -10,9 +10,9 @@ type ExecutionWithConfig = ScanExecution & { scanConfig: { targetUrl: string } |
 export class ReportService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateReportDto) {
-    const execution = await this.prisma.scanExecution.findUnique({
-      where: { id: dto.scanExecutionId },
+  async create(dto: CreateReportDto, userId: string) {
+    const execution = await this.prisma.scanExecution.findFirst({
+      where: { id: dto.scanExecutionId, scanConfig: { userId } },
       include: { scanConfig: true },
     });
     if (!execution) throw new NotFoundException(`Execution ${dto.scanExecutionId} not found`);
@@ -64,7 +64,7 @@ export class ReportService {
     return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><title>Reporte Sentinel</title>
-<style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#1e3a5f;color:#fff}.badge-high{background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px}.badge-medium{background:#d97706;color:#fff;padding:2px 8px;border-radius:4px}.badge-low{background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px}</style>
+<style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#1e3a5f;color:#fff}</style>
 </head>
 <body>
 <h1>🛡 Informe de Seguridad Web — Sentinel</h1>
@@ -83,24 +83,25 @@ ${vulns.map((v) => `<h3>${v.name} (${v.criticality})</h3><p>${v.recommendation}<
 </body></html>`;
   }
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.report.findMany({
+      where: { scanExecution: { scanConfig: { userId } } },
       orderBy: { generatedAt: 'desc' },
       include: { scanExecution: { include: { scanConfig: true } } },
     });
   }
 
-  async findOne(id: string) {
-    const r = await this.prisma.report.findUnique({
-      where: { id },
+  async findOne(id: string, userId: string) {
+    const r = await this.prisma.report.findFirst({
+      where: { id, scanExecution: { scanConfig: { userId } } },
       include: { scanExecution: { include: { scanConfig: true } } },
     });
     if (!r) throw new NotFoundException(`Report ${id} not found`);
     return r;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, userId: string): Promise<void> {
+    await this.findOne(id, userId);
     await this.prisma.report.delete({ where: { id } });
   }
 }

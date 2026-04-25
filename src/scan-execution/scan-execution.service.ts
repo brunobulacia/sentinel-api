@@ -86,8 +86,8 @@ export class ScanExecutionService {
     private readonly scanConfigService: ScanConfigService,
   ) {}
 
-  async create(dto: CreateScanExecutionDto) {
-    const config = await this.scanConfigService.findOne(dto.scanConfigId);
+  async create(dto: CreateScanExecutionDto, userId: string) {
+    const config = await this.scanConfigService.findOne(dto.scanConfigId, userId);
     const execution = await this.prisma.scanExecution.create({
       data: {
         scanConfigId: dto.scanConfigId,
@@ -154,16 +154,17 @@ export class ScanExecutionService {
     return paths[Math.floor(Math.random() * paths.length)];
   }
 
-  findAll() {
+  findAll(userId: string) {
     return this.prisma.scanExecution.findMany({
+      where: { scanConfig: { userId } },
       orderBy: { createdAt: 'desc' },
       include: { scanConfig: true },
     });
   }
 
-  async findOne(id: string) {
-    const ex = await this.prisma.scanExecution.findUnique({
-      where: { id },
+  async findOne(id: string, userId: string) {
+    const ex = await this.prisma.scanExecution.findFirst({
+      where: { id, scanConfig: { userId } },
       include: { scanConfig: true },
     });
     if (!ex) throw new NotFoundException(`ScanExecution ${id} not found`);
