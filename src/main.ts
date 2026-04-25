@@ -8,7 +8,9 @@ async function bootstrap() {
   const PORT = process.env.PORT ?? 4000;
 
   app.setGlobalPrefix('api');
-  app.enableCors({ origin: '*' });
+  app.enableCors({
+    origin: ['https://sentinel-app-swart.vercel.app', 'http://localhost:3000'],
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const config = new DocumentBuilder()
