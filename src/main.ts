@@ -15,7 +15,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Sentinel API')
-    .setDescription('Vulnerability Scanner for Tigo Bolivia BOC')
+    .setDescription('Web Vulnerability Scanner API')
     .setVersion('1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);

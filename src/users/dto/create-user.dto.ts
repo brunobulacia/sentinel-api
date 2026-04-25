@@ -6,7 +6,7 @@ export class CreateUserDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'juan@tigo.bo' })
+  @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
   email: string;
 

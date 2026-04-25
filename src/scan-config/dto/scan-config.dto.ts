@@ -10,11 +10,11 @@ import {
 import { ScanDepth, VulnerabilityType } from '../../common/enums';
 
 export class CreateScanConfigDto {
-  @ApiProperty({ example: 'BOC Production Scan' })
+  @ApiProperty({ example: 'Production Scan' })
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'https://boc.tigo.bo' })
+  @ApiProperty({ example: 'https://example.com' })
   @IsUrl()
   targetUrl: string;
 
