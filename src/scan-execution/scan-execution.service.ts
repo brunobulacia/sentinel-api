@@ -24,7 +24,7 @@ export class ScanExecutionService {
         progress: 0,
       },
     });
-    this.runScan(execution.id, config.targetUrl, config.depth).catch(
+    this.runScan(execution.id, config.targetUrl, config.depth, config.vulnerabilityTypes as string[]).catch(
       () => null,
     );
     return execution;
@@ -34,6 +34,7 @@ export class ScanExecutionService {
     executionId: string,
     targetUrl: string,
     depth: string,
+    vulnTypes: string[] = [],
   ): Promise<void> {
     await this.prisma.scanExecution.update({
       where: { id: executionId },
@@ -41,7 +42,7 @@ export class ScanExecutionService {
     });
 
     try {
-      const engine = new ScannerEngine(targetUrl, depth);
+      const engine = new ScannerEngine(targetUrl, depth, vulnTypes);
 
       const vulnerabilities = await engine.scan(async (progress) => {
         await this.prisma.scanExecution.update({
