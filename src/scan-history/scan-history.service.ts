@@ -1,52 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
-import { ScanExecution } from '../scan-execution/entities/scan-execution.entity';
-import { Vulnerability } from '../vulnerability-classification/entities/vulnerability.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { Criticality, ScanStatus } from '../common/enums';
 
 @Injectable()
 export class ScanHistoryService {
-  constructor(
-    @InjectRepository(ScanExecution)
-    private readonly executionRepo: Repository<ScanExecution>,
-    @InjectRepository(Vulnerability)
-    private readonly vulnRepo: Repository<Vulnerability>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(filters: { from?: string; to?: string; criticality?: Criticality; status?: ScanStatus }) {
-    const where: Record<string, unknown> = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.from && filters.to) {
-      where.createdAt = Between(new Date(filters.from), new Date(filters.to));
-    }
-    return this.executionRepo.find({ where, order: { createdAt: 'DESC' } });
+  findAll(filters: { from?: string; to?: string; criticality?: Criticality; status?: ScanStatus }) {
+    return this.prisma.scanExecution.findMany({
+      where: {
+        ...(filters.status && { status: filters.status }),
+        ...(filters.from &&
+          filters.to && {
+            createdAt: {
+              gte: new Date(filters.from),
+              lte: new Date(filters.to),
+            },
+          }),
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { scanConfig: true },
+    });
   }
 
   async stats() {
-    const all = await this.executionRepo.find({ order: { createdAt: 'DESC' }, take: 10 });
-    const stats = await Promise.all(
-      all.map(async (ex) => {
-        const vulns = await this.vulnRepo.find({ where: { scanExecutionId: ex.id } });
-        return {
-          id: ex.id,
-          date: ex.createdAt,
-          status: ex.status,
-          targetUrl: ex.scanConfig?.targetUrl,
-          total: vulns.length,
-          high: vulns.filter((v) => v.criticality === Criticality.HIGH).length,
-          medium: vulns.filter((v) => v.criticality === Criticality.MEDIUM).length,
-          low: vulns.filter((v) => v.criticality === Criticality.LOW).length,
-        };
-      }),
-    );
-    return stats;
+    const all = await this.prisma.scanExecution.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: { scanConfig: true, vulnerabilities: true },
+    });
+
+    return all.map((ex) => ({
+      id: ex.id,
+      date: ex.createdAt,
+      status: ex.status,
+      targetUrl: ex.scanConfig?.targetUrl,
+      total: ex.vulnerabilities.length,
+      high: ex.vulnerabilities.filter((v) => v.criticality === Criticality.HIGH).length,
+      medium: ex.vulnerabilities.filter((v) => v.criticality === Criticality.MEDIUM).length,
+      low: ex.vulnerabilities.filter((v) => v.criticality === Criticality.LOW).length,
+    }));
   }
 
   async compare(id1: string, id2: string) {
     const [vulns1, vulns2] = await Promise.all([
-      this.vulnRepo.find({ where: { scanExecutionId: id1 } }),
-      this.vulnRepo.find({ where: { scanExecutionId: id2 } }),
+      this.prisma.vulnerability.findMany({ where: { scanExecutionId: id1 } }),
+      this.prisma.vulnerability.findMany({ where: { scanExecutionId: id2 } }),
     ]);
 
     const names1 = new Set(vulns1.map((v) => v.name));

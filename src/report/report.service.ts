@@ -1,28 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Report } from './entities/report.entity';
-import { Vulnerability } from '../vulnerability-classification/entities/vulnerability.entity';
-import { ScanExecution } from '../scan-execution/entities/scan-execution.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateReportDto } from './dto/report.dto';
 import { Criticality } from '../common/enums';
+import { ScanExecution, Vulnerability } from '@prisma/client';
+
+type ExecutionWithConfig = ScanExecution & { scanConfig: { targetUrl: string } | null };
 
 @Injectable()
 export class ReportService {
-  constructor(
-    @InjectRepository(Report)
-    private readonly reportRepo: Repository<Report>,
-    @InjectRepository(Vulnerability)
-    private readonly vulnRepo: Repository<Vulnerability>,
-    @InjectRepository(ScanExecution)
-    private readonly executionRepo: Repository<ScanExecution>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateReportDto): Promise<Report> {
-    const execution = await this.executionRepo.findOne({ where: { id: dto.scanExecutionId } });
+  async create(dto: CreateReportDto) {
+    const execution = await this.prisma.scanExecution.findUnique({
+      where: { id: dto.scanExecutionId },
+      include: { scanConfig: true },
+    });
     if (!execution) throw new NotFoundException(`Execution ${dto.scanExecutionId} not found`);
 
-    const vulns = await this.vulnRepo.find({ where: { scanExecutionId: dto.scanExecutionId } });
+    const vulns = await this.prisma.vulnerability.findMany({
+      where: { scanExecutionId: dto.scanExecutionId },
+    });
 
     const high = vulns.filter((v) => v.criticality === Criticality.HIGH);
     const medium = vulns.filter((v) => v.criticality === Criticality.MEDIUM);
@@ -30,21 +27,22 @@ export class ReportService {
 
     const content = this.buildHtmlReport(execution, vulns, high, medium, low);
 
-    const report = this.reportRepo.create({
-      title: `Reporte de Seguridad - ${execution.scanConfig?.targetUrl ?? 'Sentinel'}`,
-      format: dto.format ?? 'HTML',
-      content,
-      totalVulnerabilities: vulns.length,
-      highCount: high.length,
-      mediumCount: medium.length,
-      lowCount: low.length,
-      scanExecution: execution,
+    return this.prisma.report.create({
+      data: {
+        title: `Reporte de Seguridad - ${execution.scanConfig?.targetUrl ?? 'Sentinel'}`,
+        format: dto.format ?? 'HTML',
+        content,
+        totalVulnerabilities: vulns.length,
+        highCount: high.length,
+        mediumCount: medium.length,
+        lowCount: low.length,
+        scanExecutionId: dto.scanExecutionId,
+      },
     });
-    return this.reportRepo.save(report);
   }
 
   private buildHtmlReport(
-    execution: ScanExecution,
+    execution: ExecutionWithConfig,
     vulns: Vulnerability[],
     high: Vulnerability[],
     medium: Vulnerability[],
@@ -85,18 +83,24 @@ ${vulns.map((v) => `<h3>${v.name} (${v.criticality})</h3><p>${v.recommendation}<
 </body></html>`;
   }
 
-  findAll(): Promise<Report[]> {
-    return this.reportRepo.find({ order: { generatedAt: 'DESC' } });
+  findAll() {
+    return this.prisma.report.findMany({
+      orderBy: { generatedAt: 'desc' },
+      include: { scanExecution: { include: { scanConfig: true } } },
+    });
   }
 
-  async findOne(id: string): Promise<Report> {
-    const r = await this.reportRepo.findOne({ where: { id } });
+  async findOne(id: string) {
+    const r = await this.prisma.report.findUnique({
+      where: { id },
+      include: { scanExecution: { include: { scanConfig: true } } },
+    });
     if (!r) throw new NotFoundException(`Report ${id} not found`);
     return r;
   }
 
   async remove(id: string): Promise<void> {
     await this.findOne(id);
-    await this.reportRepo.delete(id);
+    await this.prisma.report.delete({ where: { id } });
   }
 }
