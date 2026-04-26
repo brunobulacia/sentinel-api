@@ -33,7 +33,7 @@ export class MlAnalysisService {
         vuln_id: v.id,
         vuln_type: v.type,
         cvss_score: v.cvssScore ?? 5.0,
-        url_depth: this.urlDepth(v.affectedUrl),
+        url_depth: Math.max(1, this.urlDepth(v.affectedUrl)),
         has_param: v.affectedUrl?.includes('?') ?? false,
         response_time_ms: 200,
         method: 'GET',
