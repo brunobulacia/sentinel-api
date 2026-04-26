@@ -9,6 +9,7 @@ import { VulnerabilityClassificationModule } from './vulnerability-classificatio
 import { ReportModule } from './report/report.module';
 import { ScanHistoryModule } from './scan-history/scan-history.module';
 import { AiAnalysisModule } from './ai-analysis/ai-analysis.module';
+import { MlAnalysisModule } from './ml-analysis/ml-analysis.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AiAnalysisModule } from './ai-analysis/ai-analysis.module';
     ReportModule,
     ScanHistoryModule,
     AiAnalysisModule,
+    MlAnalysisModule,
   ],
 })
 export class AppModule {}
