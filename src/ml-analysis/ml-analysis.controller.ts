@@ -26,19 +26,19 @@ export class MlAnalysisController {
 
   @Get('model/info')
   @ApiOperation({ summary: 'Random Forest model metadata and accuracy' })
-  modelInfo() {
+  modelInfo(): Promise<unknown> {
     return this.service.getModelInfo();
   }
 
   @Get(':executionId')
   @ApiOperation({ summary: 'ML-based severity prediction for all vulns in a scan' })
-  analyze(@Param('executionId') executionId: string, @CurrentUser() user: AuthUser) {
+  analyze(@Param('executionId') executionId: string, @CurrentUser() user: AuthUser): Promise<unknown> {
     return this.service.analyzeExecution(executionId, user.id);
   }
 
   @Post('predict')
   @ApiOperation({ summary: 'Single vulnerability severity prediction' })
-  predict(@Body() dto: PredictDto) {
+  predict(@Body() dto: PredictDto): Promise<unknown> {
     return this.service.predictSingle({
       vuln_type: dto.vuln_type,
       cvss_score: dto.cvss_score ?? 5.0,
