@@ -62,22 +62,40 @@ export class MlAnalysisService {
 
     const data: MlBatchResult = await res.json();
 
+    // Build lookup for vuln metadata by id
+    const vulnMap = new Map(execution.vulnerabilities.map((v) => [v.id, v]));
+
     const countMap = { HIGH: 0, MEDIUM: 0, LOW: 0 };
     let totalConf = 0;
-    for (const p of data.predictions) {
+
+    const enrichedPredictions = data.predictions.map((p) => {
       const key = p.criticality as keyof typeof countMap;
       if (key in countMap) countMap[key]++;
       totalConf += p.confidence;
-    }
+
+      const vuln = p.vuln_id ? vulnMap.get(p.vuln_id) : undefined;
+      return {
+        vuln_id: p.vuln_id,
+        name: vuln?.name ?? 'Desconocida',
+        type: vuln?.type ?? 'OTHER',
+        cvssScore: vuln?.cvssScore ?? null,
+        affectedUrl: vuln?.affectedUrl ?? '',
+        currentCriticality: vuln?.criticality ?? null,
+        mlCriticality: p.criticality,
+        confidence: p.confidence,
+        probabilities: p.probabilities,
+        agreement: vuln?.criticality === p.criticality,
+      };
+    });
 
     return {
       executionId,
       targetUrl: execution.scanConfig.targetUrl,
-      predictions: data.predictions,
+      predictions: enrichedPredictions,
       summary: {
         ...countMap,
-        avgConfidence: data.predictions.length > 0
-          ? Math.round((totalConf / data.predictions.length) * 100) / 100
+        avgConfidence: enrichedPredictions.length > 0
+          ? Math.round((totalConf / enrichedPredictions.length) * 100) / 100
           : 0,
       },
     };
