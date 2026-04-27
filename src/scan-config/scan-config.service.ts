@@ -1,63 +1,40 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { ScanConfig } from './entities/scan-config.entity';
 import { CreateScanConfigDto, UpdateScanConfigDto } from './dto/scan-config.dto';
 
 @Injectable()
 export class ScanConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @InjectRepository(ScanConfig)
+    private readonly repo: Repository<ScanConfig>,
+  ) {}
 
-  create(dto: CreateScanConfigDto, userId: string) {
-    return this.prisma.scanConfig.create({
-      data: {
-        name: dto.name,
-        targetUrl: dto.targetUrl,
-        vulnerabilityTypes: dto.vulnerabilityTypes ?? [],
-        depth: dto.depth,
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
-        userId,
-      },
-    });
+  create(dto: CreateScanConfigDto): Promise<ScanConfig> {
+    const entity = this.repo.create(dto as Partial<ScanConfig>);
+    return this.repo.save(entity);
   }
 
-  findAll(userId: string) {
-    return this.prisma.scanConfig.findMany({
-      where: { isActive: true, userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  findAll(): Promise<ScanConfig[]> {
+    return this.repo.find({ where: { isActive: true }, order: { createdAt: 'DESC' } });
   }
 
-  async findOne(id: string, userId: string) {
-    const config = await this.prisma.scanConfig.findFirst({
-      where: { id, isActive: true, userId },
-    });
+  async findOne(id: string): Promise<ScanConfig> {
+    const config = await this.repo.findOne({ where: { id, isActive: true } });
     if (!config) throw new NotFoundException(`ScanConfig ${id} not found`);
     return config;
   }
 
-  async update(id: string, dto: UpdateScanConfigDto, userId: string) {
-    await this.findOne(id, userId);
-    return this.prisma.scanConfig.update({
-      where: { id },
-      data: {
-        name: dto.name,
-        targetUrl: dto.targetUrl,
-        vulnerabilityTypes: dto.vulnerabilityTypes,
-        depth: dto.depth,
-        scheduledAt:
-          dto.scheduledAt !== undefined
-            ? dto.scheduledAt
-              ? new Date(dto.scheduledAt)
-              : null
-            : undefined,
-      },
-    });
+  async update(id: string, dto: UpdateScanConfigDto): Promise<ScanConfig> {
+    const config = await this.findOne(id);
+    Object.assign(config, dto);
+    return this.repo.save(config);
   }
 
-  async remove(id: string, userId: string): Promise<void> {
-    await this.findOne(id, userId);
-    await this.prisma.scanConfig.update({
-      where: { id },
-      data: { isActive: false },
-    });
+  async remove(id: string): Promise<void> {
+    const config = await this.findOne(id);
+    config.isActive = false;
+    await this.repo.save(config);
   }
 }
