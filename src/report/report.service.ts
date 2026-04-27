@@ -1,28 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Report } from './entities/report.entity';
-import { Vulnerability } from '../vulnerability-classification/entities/vulnerability.entity';
-import { ScanExecution } from '../scan-execution/entities/scan-execution.entity';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateReportDto } from './dto/report.dto';
 import { Criticality } from '../common/enums';
+import { ScanExecution, Vulnerability } from '@prisma/client';
+
+type ExecutionWithConfig = ScanExecution & {
+  scanConfig: { targetUrl: string } | null;
+};
 
 @Injectable()
 export class ReportService {
-  constructor(
-    @InjectRepository(Report)
-    private readonly reportRepo: Repository<Report>,
-    @InjectRepository(Vulnerability)
-    private readonly vulnRepo: Repository<Vulnerability>,
-    @InjectRepository(ScanExecution)
-    private readonly executionRepo: Repository<ScanExecution>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateReportDto): Promise<Report> {
-    const execution = await this.executionRepo.findOne({ where: { id: dto.scanExecutionId } });
-    if (!execution) throw new NotFoundException(`Execution ${dto.scanExecutionId} not found`);
+  async create(dto: CreateReportDto, userId: string) {
+    const execution = await this.prisma.scanExecution.findFirst({
+      where: { id: dto.scanExecutionId, scanConfig: { userId } },
+      include: { scanConfig: true },
+    });
+    if (!execution)
+      throw new NotFoundException(`Execution ${dto.scanExecutionId} not found`);
 
-    const vulns = await this.vulnRepo.find({ where: { scanExecutionId: dto.scanExecutionId } });
+    const vulns = await this.prisma.vulnerability.findMany({
+      where: { scanExecutionId: dto.scanExecutionId },
+    });
 
     const high = vulns.filter((v) => v.criticality === Criticality.HIGH);
     const medium = vulns.filter((v) => v.criticality === Criticality.MEDIUM);
@@ -30,21 +30,22 @@ export class ReportService {
 
     const content = this.buildHtmlReport(execution, vulns, high, medium, low);
 
-    const report = this.reportRepo.create({
-      title: `Reporte de Seguridad - ${execution.scanConfig?.targetUrl ?? 'Sentinel'}`,
-      format: dto.format ?? 'HTML',
-      content,
-      totalVulnerabilities: vulns.length,
-      highCount: high.length,
-      mediumCount: medium.length,
-      lowCount: low.length,
-      scanExecution: execution,
+    return this.prisma.report.create({
+      data: {
+        title: `Reporte de Seguridad - ${execution.scanConfig?.targetUrl ?? 'Sentinel'}`,
+        format: dto.format ?? 'HTML',
+        content,
+        totalVulnerabilities: vulns.length,
+        highCount: high.length,
+        mediumCount: medium.length,
+        lowCount: low.length,
+        scanExecutionId: dto.scanExecutionId,
+      },
     });
-    return this.reportRepo.save(report);
   }
 
   private buildHtmlReport(
-    execution: ScanExecution,
+    execution: ExecutionWithConfig,
     vulns: Vulnerability[],
     high: Vulnerability[],
     medium: Vulnerability[],
@@ -66,7 +67,7 @@ export class ReportService {
     return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><title>Reporte Sentinel</title>
-<style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#1e3a5f;color:#fff}.badge-high{background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px}.badge-medium{background:#d97706;color:#fff;padding:2px 8px;border-radius:4px}.badge-low{background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px}</style>
+<style>body{font-family:sans-serif;padding:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left}th{background:#1e3a5f;color:#fff}</style>
 </head>
 <body>
 <h1>🛡 Informe de Seguridad Web — Sentinel</h1>
@@ -85,18 +86,25 @@ ${vulns.map((v) => `<h3>${v.name} (${v.criticality})</h3><p>${v.recommendation}<
 </body></html>`;
   }
 
-  findAll(): Promise<Report[]> {
-    return this.reportRepo.find({ order: { generatedAt: 'DESC' } });
+  findAll(userId: string) {
+    return this.prisma.report.findMany({
+      where: { scanExecution: { scanConfig: { userId } } },
+      orderBy: { generatedAt: 'desc' },
+      include: { scanExecution: { include: { scanConfig: true } } },
+    });
   }
 
-  async findOne(id: string): Promise<Report> {
-    const r = await this.reportRepo.findOne({ where: { id } });
+  async findOne(id: string, userId: string) {
+    const r = await this.prisma.report.findFirst({
+      where: { id, scanExecution: { scanConfig: { userId } } },
+      include: { scanExecution: { include: { scanConfig: true } } },
+    });
     if (!r) throw new NotFoundException(`Report ${id} not found`);
     return r;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
-    await this.reportRepo.delete(id);
+  async remove(id: string, userId: string): Promise<void> {
+    await this.findOne(id, userId);
+    await this.prisma.report.delete({ where: { id } });
   }
 }
